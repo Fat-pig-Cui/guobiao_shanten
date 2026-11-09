@@ -1,0 +1,24 @@
+#include "shanten_core.hpp"
+#include <unordered_map>
+using namespace std; using U=U128;
+string us(U x){if(!x)return"0";string s;while(x){s+=char('0'+x%10);x/=10;}reverse(s.begin(),s.end());return s;}
+int cond[6][9]={{0,3,6,10,13,16,20,23,26},{0,3,6,11,14,17,19,22,25},{1,4,7,11,14,17,18,21,24},{1,4,7,9,12,15,20,23,26},{2,5,8,9,12,15,19,22,25},{2,5,8,10,13,16,18,21,24}};
+struct A{array<uint8_t,24>v{};};
+struct K{uint8_t n;uint64_t lo;uint32_t hi;bool operator==(K const&o)const{return n==o.n&&lo==o.lo&&hi==o.hi;}};
+struct H{size_t operator()(K const&x)const{return x.n^(x.lo*0x9e3779b97f4a7c15ULL)^((uint64_t)x.hi<<7);}};using M=unordered_map<K,U,H>;
+K pack(uint8_t n,A const&a){K k{n,0,0};for(int i=0;i<16;i++)k.lo|=uint64_t(a.v[i]&15)<<(4*i);for(int i=16;i<24;i++)k.hi|=uint32_t(a.v[i]&15)<<(4*(i-16));return k;}
+A unpack(K const&k){A a;for(int i=0;i<16;i++)a.v[i]=(k.lo>>(4*i))&15;for(int i=16;i<24;i++)a.v[i]=(k.hi>>(4*(i-16)))&15;return a;}
+int ov(array<int,9>const&a,array<int,9>const&t){int z=0;for(int i=0;i<9;i++)z+=min(a[i],t[i]);return z;}
+void local_summary(int su,array<uint8_t,9>const&c,A&out){array<int,9>a{};for(int i=0;i<9;i++)a[i]=c[i];for(int r=0;r<6;r++){array<int,9>sk{};for(int j=0;j<9;j++){int x=cond[r][j];if(x/9==su)sk[x%9]=1;}for(int em=0;em<=1;em++)for(int ep=0;ep<=1;ep++){int best=ov(a,sk);for(int kind=0;kind<2;kind++)for(int st=0;st<(kind==0?7:9);st++){array<int,9>t=sk;if(em){if(kind==0){t[st]++;t[st+1]++;t[st+2]++;}else t[st]+=3;}if(ep)for(int p=0;p<9;p++){auto q=t;q[p]+=2;bool ok=1;for(int x:q)ok&=x<=4;if(ok)best=max(best,ov(a,q));}else best=max(best,ov(a,t));}out.v[4*r+2*em+ep]=best;}}}
+int pm[6][3]={{0,1,2},{0,2,1},{1,0,2},{1,2,0},{2,0,1},{2,1,0}};int mp[6][6];
+void initmp(){for(int pi=0;pi<6;pi++)for(int r=0;r<6;r++){mp[pi][r]=0;for(int q=0;q<6;q++){bool ok=1;for(int j=0;j<9;j++){int x=cond[r][j],y=pm[pi][x/9]*9+x%9;bool in=0;for(int z=0;z<9;z++)in|=cond[q][z]==y;ok&=in;}if(ok)mp[pi][r]=q;}}}
+A canon(A const&a){A best=a;for(int pi=1;pi<6;pi++){A b;for(int r=0;r<6;r++)for(int e=0;e<4;e++)b.v[4*mp[pi][r]+e]=a.v[4*r+e];if(b.v<best.v)best=b;}return best;}
+M suit(int su,int lim){M o;array<uint8_t,9>c{};int p=1;for(int i=0;i<9;i++)p*=5;for(int code=0;code<p;code++){int z=code,n=0,w=1;for(int i=0;i<9;i++){c[i]=z%5;z/=5;n+=c[i];w*=int(choose_u128(4,c[i]));}if(n>lim)continue;A a;local_summary(su,c,a);o[pack(n,a)]+=w;}return o;}
+M honor(int lim){M o;for(int code=0;code<78125;code++){int z=code,n=0,w=1;array<uint8_t,7>c{};for(int i=0;i<7;i++){c[i]=z%5;z/=5;n+=c[i];w*=int(choose_u128(4,c[i]));}if(n>lim)continue;int bm=0,bp=0,both=0;for(int m=0;m<7;m++)for(int p=0;p<7;p++){array<int,7>t{};t[m]=3;t[p]+=2;bool ok=1;for(int x:t)ok&=x<=4;if(ok){int z1=0;for(int i=0;i<7;i++)z1+=min<int>(c[i],t[i]);both=max(both,z1);}bm=max(bm,min<int>(c[m],3));bp=max(bp,min<int>(c[p],2));}A a;for(int r=0;r<6;r++){a.v[4*r]=0;a.v[4*r+1]=bp;a.v[4*r+2]=bm;a.v[4*r+3]=both;}o[pack(n,a)]+=w;}return o;}
+K mergek(K const&x,K const&y,int lim){K z{};z.n=x.n+y.n;if(z.n>lim)return z;A a=unpack(x),b=unpack(y),c;for(int r=0;r<6;r++)for(int em=0;em<=1;em++)for(int ep=0;ep<=1;ep++){int best=0;for(int im=0;im<=em;im++)for(int ip=0;ip<=ep;ip++)best=max(best,(int)a.v[4*r+2*im+ip]+b.v[4*r+2*(em-im)+(ep-ip)]);c.v[4*r+2*em+ep]=best;}return pack(z.n,canon(c));}
+int best(K const&k){A a=unpack(k);int z=0;for(int r=0;r<6;r++)z=max(z,(int)a.v[4*r+3]);return z;}
+M conv(M const&a,M const&b,int lim){M o;o.reserve(a.size()*2);for(auto &[x,w]:a)for(auto &[y,v]:b){K z=mergek(x,y,lim);if(z.n<=lim)o[z]+=w*v;}return o;}
+M conv_drop(M const&a,M const&b,int lim,vector<U>&drop){M o;o.reserve(a.size()*2);for(auto &[x,w]:a)for(auto &[y,v]:b){K z=mergek(x,y,lim);if(z.n>lim)continue;if(best(z)==14)drop[z.n]+=w*v;else o[z]+=w*v;}return o;}
+M conv_drop_final(M const&a,M const&b,int lim,vector<U>&drop){M o;o.reserve(a.size()*2);for(auto &[x,w]:a)for(auto &[y,v]:b){K z=mergek(x,y,lim);if(z.n>lim)continue;if(best(z)==14)drop[z.n]+=w*v;else o[z]+=w*v;}return o;}
+U choose64(int n,int k){return choose_u128(n,k);}
+int main(){initmp();int lim=37;M all;for(int su=0;su<3;su++){auto a=suit(su,lim);cerr<<"suit "<<su<<" "<<a.size()<<"\n";if(all.empty())all=move(a);else if(su<2)all=conv(all,a,lim);else {vector<U> drop123(lim+1);all=conv_drop(all,a,lim,drop123);auto h=honor(lim);vector<U> dropFinal(lim+1);all=conv_drop_final(all,h,lim,dropFinal);cerr<<"all "<<all.size()<<"\n";vector<U> total(38);for(int n=0;n<=lim;n++)for(int k=0;k<=n;k++)total[n]+=drop123[k]*choose_u128(28,n-k);for(int n=14;n<=lim;n++){array<U,15>hh{};for(auto &[key,w]:all)if(key.n==n){int r=13-best(key);if(r>=-1&&r<=13)hh[r+1]+=w;}U win=total[n]+dropFinal[n];hh[0]+=win;cout<<n;for(int r=-1;r<=13;r++)cout<<" "<<us(hh[r+1]);cout<<"\n";}return 0;}}}
