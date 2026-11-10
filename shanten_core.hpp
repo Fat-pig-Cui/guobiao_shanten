@@ -31,11 +31,21 @@ inline std::string u128_to_string(U128 x) {
     return s;
 }
 
+// r * (n - k + i) / i is always an integer. Dividing out gcd(r, i) first keeps
+// every intermediate value at most the final binomial, so the result is exact
+// whenever C(n, k) < 2^128; larger results throw.
 inline U128 choose_u128(int n, int k) {
     if (k < 0 || k > n) return 0;
     k = std::min(k, n - k);
     U128 r = 1;
-    for (int i = 1; i <= k; ++i) r = r * (n - k + i) / i;
+    for (int i = 1; i <= k; ++i) {
+        U128 a = r, b = U128(i);
+        while (b) { U128 t = a % b; a = b; b = t; }
+        U128 m = U128(n - k + i) / (U128(i) / a);
+        r /= a;
+        if (r > ~U128(0) / m) throw std::overflow_error("choose_u128 result exceeds 128 bits");
+        r *= m;
+    }
     return r;
 }
 

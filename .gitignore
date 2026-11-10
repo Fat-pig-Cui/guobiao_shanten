@@ -3,3 +3,10 @@ compute_combo_dragon
 compute_n14_tianhe
 sample_best14
 *.o
+compute_joint
+test_joint
+
+# Local system files and Python caches
+.DS_Store
+__pycache__/
+*.py[cod]
